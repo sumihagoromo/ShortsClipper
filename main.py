@@ -71,9 +71,15 @@ def main(video_file, config, output_dir, verbose, model_size, language):
         
         # 1. 音声抽出
         logger.info("1. 音声抽出を開始...")
-        # audio_processor = AudioProcessor(config_manager)
-        # audio_file = audio_processor.extract_audio(video_file)
-        logger.info("音声抽出完了 (未実装)")
+        from src.utils.audio_processor import full_audio_extraction_workflow
+        
+        audio_config = config_manager.get_audio_config()
+        try:
+            audio_file = full_audio_extraction_workflow(video_file, audio_config)
+            logger.info(f"音声抽出完了: {audio_file}")
+        except Exception as e:
+            logger.error(f"音声抽出に失敗しました: {e}")
+            raise
         
         # 2. 文字起こし
         logger.info("2. 文字起こしを開始...")
