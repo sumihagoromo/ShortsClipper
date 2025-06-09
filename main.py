@@ -95,9 +95,15 @@ def main(video_file, config, output_dir, verbose, model_size, language):
         
         # 3. 感情分析
         logger.info("3. 感情分析を開始...")
-        # emotion_analyzer = EmotionAnalyzer(config_manager)
-        # emotion_result = emotion_analyzer.analyze(transcription_result)
-        logger.info("感情分析完了 (未実装)")
+        from src.emotion_analyzer import full_emotion_analysis_workflow
+        
+        emotion_config = config_manager.get_emotion_config()
+        try:
+            emotion_result = full_emotion_analysis_workflow(transcription_result, emotion_config)
+            logger.info(f"感情分析完了: {emotion_result['metadata']['segments_analyzed']}セグメント")
+        except Exception as e:
+            logger.error(f"感情分析に失敗しました: {e}")
+            raise
         
         # 4. ハイライト検出
         logger.info("4. ハイライト検出を開始...")
