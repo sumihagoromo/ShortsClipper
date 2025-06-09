@@ -1,0 +1,42 @@
+transcription:
+  model_size: "large-v3"
+  language: "ja"
+  initial_prompt: "以下は日本語の音声です。"
+  temperature: 0.0
+  device: "auto"  # auto, cpu, cuda
+  compute_type: "float16"
+
+emotion_analysis:
+  provider: "ml-ask"  # or "empath"
+  batch_size: 10
+  confidence_threshold: 0.5
+
+highlight_detection:
+  emotion_change_threshold: 0.3
+  high_emotion_threshold: 0.7
+  keyword_weight: 1.5
+  duration_weight: 1.2
+  min_highlight_duration: 2.0  # seconds
+  
+output:
+  csv_format: true
+  json_format: true
+  include_statistics: true
+  output_dir: "./output"
+  
+audio:
+  sample_rate: 16000
+  channels: 1
+  format: "wav"
+
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "./logs/shorts_clipper.log"
+  max_file_size: "10MB"
+  backup_count: 3
+
+performance:
+  chunk_size: 30  # seconds for large files
+  max_memory_usage: "4GB"
+  enable_gpu: true
