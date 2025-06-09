@@ -83,9 +83,15 @@ def main(video_file, config, output_dir, verbose, model_size, language):
         
         # 2. 文字起こし
         logger.info("2. 文字起こしを開始...")
-        # transcriber = Transcriber(config_manager)
-        # transcription_result = transcriber.transcribe(audio_file)
-        logger.info("文字起こし完了 (未実装)")
+        from src.transcriber import full_transcription_workflow
+        
+        transcription_config = config_manager.get_transcription_config()
+        try:
+            transcription_result = full_transcription_workflow(audio_file, transcription_config)
+            logger.info(f"文字起こし完了: {transcription_result['metadata']['segments_count']}セグメント")
+        except Exception as e:
+            logger.error(f"文字起こしに失敗しました: {e}")
+            raise
         
         # 3. 感情分析
         logger.info("3. 感情分析を開始...")
