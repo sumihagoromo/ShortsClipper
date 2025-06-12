@@ -109,11 +109,35 @@ def initialize_emotion_analyzer(config: Dict[str, Any]):
     
     try:
         if provider == "ml-ask":
-            # osetiを使用
-            import oseti
-            analyzer = oseti.Analyzer()
-            logger.info("ML-Ask (oseti) 感情分析器を初期化しました")
-            return analyzer
+            # osetiを使用（emoji問題を回避）
+            try:
+                import oseti
+                analyzer = oseti.Analyzer()
+                logger.info("ML-Ask (oseti) 感情分析器を初期化しました")
+                return analyzer
+            except Exception as oseti_error:
+                # osetiの初期化に失敗した場合はシンプルな代替実装を使用
+                logger.warning(f"oseti初期化失敗、代替実装を使用: {oseti_error}")
+                from collections import namedtuple
+                MockAnalyzer = namedtuple('MockAnalyzer', ['analyze'])
+                
+                def mock_analyze(text):
+                    # 簡単な感情分析の代替実装
+                    positive_words = ["嬉しい", "楽しい", "素晴らしい", "最高", "感動", "良い"]
+                    negative_words = ["悲しい", "残念", "つらい", "困った", "大変", "悪い"]
+                    
+                    text_lower = text.lower()
+                    pos_count = sum(1 for word in positive_words if word in text)
+                    neg_count = sum(1 for word in negative_words if word in text)
+                    
+                    if pos_count > neg_count:
+                        return 0.7  # ポジティブ
+                    elif neg_count > pos_count:
+                        return -0.7  # ネガティブ
+                    else:
+                        return 0.0  # 中性
+                
+                return MockAnalyzer(analyze=mock_analyze)
             
         elif provider == "empath":
             # Empath APIの場合（将来の拡張用）

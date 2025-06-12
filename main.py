@@ -107,15 +107,33 @@ def main(video_file, config, output_dir, verbose, model_size, language):
         
         # 4. ハイライト検出
         logger.info("4. ハイライト検出を開始...")
-        # highlight_detector = HighlightDetector(config_manager)
-        # highlights = highlight_detector.detect(transcription_result, emotion_result)
-        logger.info("ハイライト検出完了 (未実装)")
+        from src.highlight_detector import full_highlight_detection_workflow
+        
+        highlight_config = config_manager.get_highlight_config()
+        try:
+            highlight_result = full_highlight_detection_workflow(emotion_result, highlight_config)
+            logger.info(f"ハイライト検出完了: {highlight_result['metadata']['total_highlights']}個")
+        except Exception as e:
+            logger.error(f"ハイライト検出に失敗しました: {e}")
+            raise
         
         # 5. 結果出力
         logger.info("5. 結果出力を開始...")
-        # output_formatter = OutputFormatter(config_manager)
-        # output_formatter.save_results(transcription_result, emotion_result, highlights)
-        logger.info("結果出力完了 (未実装)")
+        from src.output_formatter import format_and_save_results
+        
+        output_config = config_manager.get_output_config()
+        try:
+            saved_files = format_and_save_results(
+                transcription_result,
+                emotion_result,
+                highlight_result,
+                output_config,
+                video_file
+            )
+            logger.info(f"結果出力完了: {sum(len(files) for files in saved_files.values())}ファイル")
+        except Exception as e:
+            logger.error(f"結果出力に失敗しました: {e}")
+            raise
         
         logger.info("=== 処理完了 ===")
         logger.info("すべての処理が正常に完了しました")

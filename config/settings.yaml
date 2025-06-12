@@ -1,10 +1,12 @@
 transcription:
-  model_size: "large-v3"
+  model_size: "base"
   language: "ja"
-  initial_prompt: "以下は日本語の音声です。"
-  temperature: 0.0
+  initial_prompt: "以下は日本語の音声です。技術的な話題、プログラミング、エンジニアリングに関する内容を含みます。"
+  temperature: 0.1  # わずかに上げて転写の多様性を向上
   device: "auto"  # auto, cpu, cuda
-  compute_type: "float16"
+  compute_type: "float32"
+  word_timestamps: true  # より精密なタイムスタンプ
+  condition_on_previous_text: true  # 文脈考慮を有効に
 
 emotion_analysis:
   provider: "ml-ask"  # or "empath"
@@ -12,17 +14,24 @@ emotion_analysis:
   confidence_threshold: 0.5
 
 highlight_detection:
-  emotion_change_threshold: 0.3
-  high_emotion_threshold: 0.7
-  keyword_weight: 1.5
-  duration_weight: 1.2
-  min_highlight_duration: 2.0  # seconds
+  emotion_change_threshold: 0.1  # より低い閾値で感情変化を検出
+  high_emotion_threshold: 0.2   # neutral以外の感情でもハイライト候補に
+  keyword_weight: 3.0           # キーワードの重要度を上げる
+  duration_weight: 1.0          # 継続時間の重みを下げる
+  min_highlight_duration: 0.5   # より短いセグメントも対象に
+  min_highlight_score: 0.1      # より低いスコアでもハイライト候補に
+  max_highlights: 15            # より多くのハイライトを検出
+  min_confidence: 0.3           # 信頼度要件を緩和
   
 output:
   csv_format: true
   json_format: true
   include_statistics: true
   output_dir: "./output"
+  save_transcription: true
+  save_emotion: true
+  save_highlight: true
+  save_summary: true
   
 audio:
   sample_rate: 16000

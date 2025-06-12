@@ -139,7 +139,7 @@ def extract_audio(
         stream = ffmpeg.overwrite_output(stream)
         
         # 実行
-        ffmpeg.run(stream, quiet=True, capture_output=True)
+        ffmpeg.run(stream, quiet=True)
         
         logger.info(f"音声抽出完了: {input_path} -> {output_path}")
         return output_path

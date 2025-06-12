@@ -91,14 +91,40 @@ def load_whisper_model(config: Dict[str, Any]):
         # faster-whisperの実際のインポートはここで行う
         from faster_whisper import WhisperModel
         
+        model_size = config["model_size"]
+        device = config["device"]
+        compute_type = config.get("compute_type", "float32")  # デフォルトをfloat32に変更
+        
         model = WhisperModel(
-            config["model_size"],
-            device=config["device"],
-            compute_type=config.get("compute_type", "float16")
+            model_size,
+            device=device,
+            compute_type=compute_type
         )
         
-        logger.info(f"Whisperモデル読み込み完了: {config['model_size']} on {config['device']}")
+        logger.info(f"Whisperモデル読み込み完了: {model_size} on {device}")
         return model
+        
+    except ValueError as e:
+        if "float16" in str(e):
+            # float16がサポートされていない場合はfloat32にフォールバック
+            logger.warning(f"float16がサポートされていません。float32にフォールバックします: {e}")
+            try:
+                from faster_whisper import WhisperModel
+                model = WhisperModel(
+                    config["model_size"],
+                    device=config["device"],
+                    compute_type="float32"
+                )
+                logger.info(f"Whisperモデル読み込み完了（float32）: {config['model_size']} on {config['device']}")
+                return model
+            except Exception as fallback_error:
+                error_msg = f"float32フォールバックも失敗しました: {fallback_error}"
+                logger.error(error_msg)
+                raise Exception(error_msg) from fallback_error
+        else:
+            error_msg = f"Whisperモデルの読み込みに失敗しました: {e}"
+            logger.error(error_msg)
+            raise Exception(error_msg) from e
         
     except Exception as e:
         error_msg = f"Whisperモデルの読み込みに失敗しました: {e}"
