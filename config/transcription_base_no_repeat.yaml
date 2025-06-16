@@ -1,0 +1,40 @@
+# baseモデル用文字起こし設定（繰り返し抑制強化版）
+# 高速処理用設定 + 繰り返し防止
+
+transcription:
+  model_size: "base"                 # 高速baseモデル
+  language: "ja"                     # 日本語
+  temperature: 0.0                   # 最も保守的
+  initial_prompt: "日本語の音声です。技術的な話題、プログラミング、エンジニアリングに関する内容を含みます。"
+  word_timestamps: true              # 単語レベルタイムスタンプ
+  condition_on_previous_text: false  # 前文脈無視（高速化）
+  device: "auto"                     # デバイス自動
+  compute_type: "float32"            # 計算精度
+  beam_size: 1                       # シンプルなビーム
+  best_of: 1                         # 最良候補数
+  patience: 1.0                      # デコーディング忍耐度
+  length_penalty: 1.0                # 長さペナルティ
+  repetition_penalty: 1.2            # 繰り返し抑制強化
+  no_repeat_ngram_size: 3            # 3-gram繰り返し禁止
+  vad_filter: true                   # 音声活動検出有効
+  vad_parameters:
+    min_silence_duration_ms: 800     # 800ms以上の無音（厳格化）
+
+# 後処理設定
+post_processing:
+  enable_tech_term_correction: true    # 技術用語補正
+  enable_grammar_correction: true      # 文法補正
+  enable_punctuation_cleanup: true     # 句読点清浄化
+  min_segment_length: 0.5             # 最小セグメント長（秒）
+  max_segment_length: 30.0            # 最大セグメント長（秒）
+
+# パフォーマンス設定
+performance:
+  batch_size: 16                      # バッチサイズ
+  num_workers: 1                      # ワーカー数
+  memory_efficient: true              # メモリ効率モード
+
+# ログ設定
+logging:
+  level: "INFO"                       # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

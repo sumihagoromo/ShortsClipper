@@ -1,0 +1,10 @@
+Backup process needed:
+
+1. sumi-claude-code-04_clean_10min_cleaned.json -> sumi-claude-code-04_clean_10min_cleaned_large-v3_backup.json
+2. sumi-claude-code-04_clean_10min_raw.json -> sumi-claude-code-04_clean_10min_raw_large-v3_backup.json
+
+Settings comparison needed:
+- Base model config: config/transcription_base.yaml  
+- Large-v3 config: config/transcription_large_v3.yaml
+
+Next: Re-run with base model using same clean 10min audio file

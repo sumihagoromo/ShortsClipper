@@ -85,8 +85,14 @@ results/
 *.json
 
 # Logs
-logs/
+logs/**/*.log
 *.log
+
+# Keep log directory structure
+!logs/
+!logs/transcription/
+!logs/monitoring/
+!logs/processing/
 
 # Model files
 models/

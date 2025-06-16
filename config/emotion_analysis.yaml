@@ -1,0 +1,32 @@
+# 感情分析プロセス設定ファイル
+# Usage: python process_emotions.py --config config/emotion_analysis.yaml
+
+# 感情分析設定
+emotion_analysis:
+  provider: "ml-ask"                    # 感情分析プロバイダー (ml-ask, empath)
+  batch_size: 20                       # バッチサイズ
+  confidence_threshold: 0.5            # 信頼度閾値
+  normalize_scores: true               # スコア正規化
+  emotion_categories:                  # 感情カテゴリ
+    - "joy"
+    - "sadness"
+    - "anger"
+    - "fear"
+    - "surprise"
+    - "neutral"
+
+# 後処理設定
+post_processing:
+  emotion_smoothing: true              # 感情スムージング
+  min_segment_confidence: 0.3          # 最小セグメント信頼度
+  emotion_change_threshold: 0.2        # 感情変化検出閾値
+
+# パフォーマンス設定
+performance:
+  parallel_processing: false          # 並列処理（現在は無効）
+  cache_results: true                  # 結果キャッシュ
+
+# ログ設定
+logging:
+  level: "INFO"                        # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

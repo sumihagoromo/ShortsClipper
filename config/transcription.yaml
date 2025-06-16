@@ -1,0 +1,38 @@
+# 文字起こしプロセス設定ファイル
+# Usage: python process_transcript.py --config config/transcription.yaml
+
+# 文字起こし設定
+transcription:
+  model_size: "large-v3"         # Whisperモデルサイズ (tiny, base, small, medium, large, large-v3)
+  language: "ja"                 # 言語コード
+  temperature: 0.0               # サンプリング温度（0.0-1.0、0.0が最も保守的）
+  initial_prompt: "以下は日本語の音声です。技術的な話題、プログラミング、エンジニアリングに関する内容を含みます。"
+  word_timestamps: true          # 単語レベルタイムスタンプ
+  condition_on_previous_text: true   # 前のテキストを考慮
+  device: "auto"                 # デバイス (auto, cpu, cuda)
+  compute_type: "float32"        # 計算精度 (float16, float32)
+  beam_size: 5                   # ビームサーチサイズ
+  best_of: 5                     # 最良候補数
+  patience: 1.0                  # デコーディング忍耐度
+  length_penalty: 1.0            # 長さペナルティ
+  repetition_penalty: 1.1        # 繰り返しペナルティ
+  no_repeat_ngram_size: 0        # 繰り返し禁止n-gramサイズ
+
+# 後処理設定
+post_processing:
+  enable_tech_term_correction: true    # 技術用語補正
+  enable_grammar_correction: true      # 文法補正
+  enable_punctuation_cleanup: true     # 句読点清浄化
+  min_segment_length: 0.1             # 最小セグメント長（秒）
+  max_segment_length: 30.0            # 最大セグメント長（秒）
+
+# パフォーマンス設定
+performance:
+  batch_size: 16                      # バッチサイズ
+  num_workers: 1                      # ワーカー数
+  memory_efficient: true              # メモリ効率モード
+
+# ログ設定
+logging:
+  level: "INFO"                       # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

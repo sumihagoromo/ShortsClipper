@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-ShortsClipper - YouTubeライブ配信動画分析ツール
-
-音声認識、感情分析、ハイライト検出を行い、動画編集を支援します。
+ShortsClipper - メインコントローラー
+各処理を個別実行またはパイプライン実行できるコマンドラインインターフェース
 """
 
 import sys
@@ -13,175 +12,237 @@ import click
 # プロジェクトルートをPythonパスに追加
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.utils.config import ConfigManager
-
-
-@click.command()
-@click.argument('video_file', type=click.Path(exists=True))
-@click.option('--config', '-c', default='config/settings.yaml', 
-              help='設定ファイルのパス')
-@click.option('--output-dir', '-o', default=None,
-              help='出力ディレクトリ (設定ファイルの値を上書き)')
-@click.option('--verbose', '-v', is_flag=True,
-              help='詳細ログ出力')
-@click.option('--model-size', default=None,
-              help='Whisperモデルサイズ (tiny, base, small, medium, large, large-v3)')
-@click.option('--language', default=None,
-              help='音声言語 (ja, en, etc.)')
-def main(video_file, config, output_dir, verbose, model_size, language):
-    """
-    動画ファイルを分析してハイライトを検出します。
-    
-    VIDEO_FILE: 分析する動画ファイルのパス
-    """
-    try:
-        # 設定管理の初期化
-        config_manager = ConfigManager(config)
-        
-        # ログレベルの調整
-        if verbose:
-            logging.getLogger().setLevel(logging.DEBUG)
-        
-        logger = logging.getLogger(__name__)
-        logger.info("ShortsClipper を開始します")
-        logger.info(f"動画ファイル: {video_file}")
-        
-        # 設定の表示
-        logger.info("=== 設定情報 ===")
-        transcription_config = config_manager.get_transcription_config()
-        logger.info(f"Whisperモデル: {transcription_config.get('model_size', 'unknown')}")
-        logger.info(f"言語: {transcription_config.get('language', 'unknown')}")
-        
-        # コマンドライン引数での設定上書き
-        if model_size:
-            transcription_config['model_size'] = model_size
-            logger.info(f"モデルサイズを {model_size} に変更")
-            
-        if language:
-            transcription_config['language'] = language
-            logger.info(f"言語を {language} に変更")
-            
-        if output_dir:
-            output_config = config_manager.get_output_config()
-            output_config['output_dir'] = output_dir
-            logger.info(f"出力ディレクトリを {output_dir} に変更")
-        
-        # TODO: 各モジュールの実装後に有効化
-        logger.info("=== 処理開始 ===")
-        
-        # 1. 音声抽出
-        logger.info("1. 音声抽出を開始...")
-        from src.utils.audio_processor import full_audio_extraction_workflow
-        
-        audio_config = config_manager.get_audio_config()
-        try:
-            audio_file = full_audio_extraction_workflow(video_file, audio_config)
-            logger.info(f"音声抽出完了: {audio_file}")
-        except Exception as e:
-            logger.error(f"音声抽出に失敗しました: {e}")
-            raise
-        
-        # 2. 文字起こし
-        logger.info("2. 文字起こしを開始...")
-        from src.transcriber import full_transcription_workflow
-        
-        transcription_config = config_manager.get_transcription_config()
-        try:
-            transcription_result = full_transcription_workflow(audio_file, transcription_config)
-            logger.info(f"文字起こし完了: {transcription_result['metadata']['segments_count']}セグメント")
-        except Exception as e:
-            logger.error(f"文字起こしに失敗しました: {e}")
-            raise
-        
-        # 3. 感情分析
-        logger.info("3. 感情分析を開始...")
-        from src.emotion_analyzer import full_emotion_analysis_workflow
-        
-        emotion_config = config_manager.get_emotion_config()
-        try:
-            emotion_result = full_emotion_analysis_workflow(transcription_result, emotion_config)
-            logger.info(f"感情分析完了: {emotion_result['metadata']['segments_analyzed']}セグメント")
-        except Exception as e:
-            logger.error(f"感情分析に失敗しました: {e}")
-            raise
-        
-        # 4. ハイライト検出
-        logger.info("4. ハイライト検出を開始...")
-        from src.highlight_detector import full_highlight_detection_workflow
-        
-        highlight_config = config_manager.get_highlight_config()
-        try:
-            highlight_result = full_highlight_detection_workflow(emotion_result, highlight_config)
-            logger.info(f"ハイライト検出完了: {highlight_result['metadata']['total_highlights']}個")
-        except Exception as e:
-            logger.error(f"ハイライト検出に失敗しました: {e}")
-            raise
-        
-        # 5. 結果出力
-        logger.info("5. 結果出力を開始...")
-        from src.output_formatter import format_and_save_results
-        
-        output_config = config_manager.get_output_config()
-        try:
-            saved_files = format_and_save_results(
-                transcription_result,
-                emotion_result,
-                highlight_result,
-                output_config,
-                video_file
-            )
-            logger.info(f"結果出力完了: {sum(len(files) for files in saved_files.values())}ファイル")
-        except Exception as e:
-            logger.error(f"結果出力に失敗しました: {e}")
-            raise
-        
-        logger.info("=== 処理完了 ===")
-        logger.info("すべての処理が正常に完了しました")
-        
-    except Exception as e:
-        logger.error(f"エラーが発生しました: {e}")
-        if verbose:
-            logger.exception("詳細なエラー情報:")
-        sys.exit(1)
+from src.utils.logging_config import setup_process_logging
 
 
 @click.group()
-def cli():
-    """ShortsClipper コマンドラインツール"""
-    pass
+@click.option('--verbose', '-v', is_flag=True, help='詳細ログ出力')
+@click.pass_context
+def cli(ctx, verbose):
+    """ShortsClipper - YouTube動画ハイライト検出ツール"""
+    ctx.ensure_object(dict)
+    ctx.obj['verbose'] = verbose
 
 
 @cli.command()
-@click.option('--config', '-c', default='config/settings.yaml')
-def validate_config(config):
-    """設定ファイルの検証"""
+@click.argument('input_path', type=click.Path(exists=True))
+@click.option('--output', '-o', default='data/stage1_audio', help='出力ディレクトリ')
+@click.option('--config', '-c', default='config/audio_extraction.yaml', help='設定ファイル')
+@click.pass_context
+def audio(ctx, input_path, output, config):
+    """動画から音声を抽出"""
+    from process_audio import main as audio_main
+    
+    logger = setup_process_logging('main_audio', 'processing', ctx.obj.get('verbose', False))
+    logger.info(f"音声抽出: {input_path} -> {output}")
+    
+    # process_audio.pyのmain関数を呼び出し
+    audio_main(input_path, output, config, ctx.obj.get('verbose', False))
+
+
+@cli.command()
+@click.argument('input_path', type=click.Path(exists=True))
+@click.option('--output', '-o', default='data/stage2_transcript', help='出力ディレクトリ')
+@click.option('--config', '-c', default='config/transcription_base.yaml', help='設定ファイル')
+@click.option('--model', type=click.Choice(['base', 'small', 'medium', 'large-v3']), help='Whisperモデル')
+@click.pass_context
+def transcript(ctx, input_path, output, config, model):
+    """音声を文字起こし"""
+    from process_transcript import main as transcript_main
+    
+    logger = setup_process_logging('main_transcript', 'processing', ctx.obj.get('verbose', False))
+    logger.info(f"文字起こし: {input_path} -> {output}")
+    
+    # モデル指定時は設定を動的変更
+    if model:
+        config = f"config/transcription_{model}.yaml"
+        logger.info(f"モデル指定: {model}")
+    
+    transcript_main(input_path, output, config, ctx.obj.get('verbose', False))
+
+
+@cli.command()
+@click.argument('input_path', type=click.Path(exists=True))
+@click.option('--output', '-o', default='data/stage2_transcript', help='出力ディレクトリ')
+@click.option('--profile', '-p', type=click.Choice(['direct', 'batch_standard', 'batch_fast', 'high_quality']), 
+              help='処理プロファイル指定')
+@click.option('--quality', is_flag=True, help='品質優先モード')
+@click.option('--force-split', is_flag=True, help='強制分割処理')
+@click.option('--overlap-seconds', default=5.0, help='オーバーラップ時間（秒）')
+@click.option('--no-overlap', is_flag=True, help='オーバーラップ処理を無効化')
+@click.pass_context
+def adaptive(ctx, input_path, output, profile, quality, force_split, overlap_seconds, no_overlap):
+    """適応的音声転写（長時間音声対応）"""
+    from process_transcript_adaptive import AdaptiveTranscriber
+    
+    logger = setup_process_logging('main_adaptive', 'transcription', 
+                                 logging.DEBUG if ctx.obj.get('verbose', False) else logging.INFO)
+    logger.info(f"適応的転写: {input_path} -> {output}")
+    
     try:
-        config_manager = ConfigManager(config)
-        click.echo("✅ 設定ファイルは正常です")
+        transcriber = AdaptiveTranscriber(logger)
+        result = transcriber.process_audio_adaptive(
+            input_path, output, profile, quality, force_split,
+            overlap_seconds, not no_overlap
+        )
         
-        # 設定の詳細表示
-        click.echo("\n=== 設定内容 ===")
-        click.echo(f"Whisperモデル: {config_manager.get('transcription.model_size')}")
-        click.echo(f"言語: {config_manager.get('transcription.language')}")
-        click.echo(f"出力ディレクトリ: {config_manager.get('output.output_dir')}")
-        click.echo(f"ログレベル: {config_manager.get('logging.level')}")
-        
+        if result['success']:
+            logger.info(f"✅ 適応的転写完了: {len(result['segments'])}セグメント")
+        else:
+            logger.error(f"❌ 適応的転写失敗: {result['error_message']}")
+            
     except Exception as e:
-        click.echo(f"❌ 設定ファイルにエラーがあります: {e}")
+        logger.error(f"適応的転写エラー: {e}")
+        raise
+
+
+@cli.command()
+@click.argument('input_path', type=click.Path(exists=True))
+@click.option('--output', '-o', default='data/stage3_emotions', help='出力ディレクトリ')
+@click.option('--config', '-c', default='config/emotion_analysis.yaml', help='設定ファイル')
+@click.pass_context
+def emotions(ctx, input_path, output, config):
+    """文字起こしから感情分析"""
+    from process_emotions import main as emotions_main
+    
+    logger = setup_process_logging('main_emotions', 'processing', ctx.obj.get('verbose', False))
+    logger.info(f"感情分析: {input_path} -> {output}")
+    
+    emotions_main(input_path, output, config, ctx.obj.get('verbose', False))
+
+
+@cli.command()
+@click.argument('input_path', type=click.Path(exists=True))
+@click.option('--output', '-o', default='data/stage4_highlights', help='出力ディレクトリ')
+@click.option('--config', '-c', default='config/highlight_detection.yaml', help='設定ファイル')
+@click.option('--preset', type=click.Choice(['conservative', 'standard', 'aggressive']), help='プリセット設定')
+@click.pass_context
+def highlights(ctx, input_path, output, config, preset):
+    """感情分析からハイライト検出"""
+    from process_highlights import main as highlights_main
+    
+    logger = setup_process_logging('main_highlights', 'processing', ctx.obj.get('verbose', False))
+    logger.info(f"ハイライト検出: {input_path} -> {output}")
+    
+    # プリセット指定時は設定を動的変更
+    if preset:
+        config = f"config/highlight_detection_{preset}.yaml"
+        logger.info(f"プリセット指定: {preset}")
+    
+    highlights_main(input_path, output, config, ctx.obj.get('verbose', False))
+
+
+@cli.command()
+@click.argument('input_path', type=click.Path(exists=True))
+@click.option('--model', default='base', type=click.Choice(['base', 'small', 'medium', 'large-v3']), help='Whisperモデル')
+@click.option('--preset', default='standard', type=click.Choice(['conservative', 'standard', 'aggressive']), help='ハイライト検出プリセット')
+@click.option('--skip-audio', is_flag=True, help='音声抽出をスキップ（音声ファイル指定時）')
+@click.option('--skip-clean', is_flag=True, help='音声クリーニングをスキップ')
+@click.pass_context
+def pipeline(ctx, input_path, model, preset, skip_audio, skip_clean):
+    """完全パイプライン実行（動画 -> ハイライト）"""
+    import subprocess
+    from pathlib import Path
+    
+    logger = setup_process_logging('main_pipeline', 'processing', ctx.obj.get('verbose', False))
+    logger.info(f"パイプライン開始: {input_path}")
+    
+    input_file = Path(input_path)
+    video_id = input_file.stem
+    verbose_flag = ['-v'] if ctx.obj.get('verbose', False) else []
+    
+    try:
+        current_file = input_path
+        
+        # Stage 1: 音声抽出
+        if not skip_audio:
+            logger.info("Stage 1: 音声抽出")
+            subprocess.run([
+                'python', 'main.py', 'audio', current_file,
+                '-o', 'data/stage1_audio',
+                '-c', 'config/audio_extraction.yaml'
+            ] + verbose_flag, check=True)
+            current_file = f"data/stage1_audio/{video_id}_audio.wav"
+        
+        # 音声クリーニング
+        if not skip_clean:
+            logger.info("音声クリーニング")
+            subprocess.run([
+                'python', 'scripts/analysis/create_clean_audio.py'
+            ], check=True)
+            current_file = f"data/stage1_audio/{video_id}_audio_clean.wav"
+        
+        # Stage 2: 文字起こし
+        logger.info(f"Stage 2: 文字起こし ({model})")
+        subprocess.run([
+            'python', 'main.py', 'transcript', current_file,
+            '-o', 'data/stage2_transcript',
+            '--model', model
+        ] + verbose_flag, check=True)
+        current_file = f"data/stage2_transcript/{Path(current_file).stem}_cleaned.json"
+        
+        # Stage 3: 感情分析
+        logger.info("Stage 3: 感情分析")
+        subprocess.run([
+            'python', 'main.py', 'emotions', current_file,
+            '-o', 'data/stage3_emotions'
+        ] + verbose_flag, check=True)
+        current_file = f"data/stage3_emotions/{Path(current_file).stem.replace('_cleaned', '')}_text_emotions.json"
+        
+        # Stage 4: ハイライト検出
+        logger.info(f"Stage 4: ハイライト検出 ({preset})")
+        subprocess.run([
+            'python', 'main.py', 'highlights', current_file,
+            '-o', 'data/stage4_highlights',
+            '--preset', preset
+        ] + verbose_flag, check=True)
+        
+        logger.info("✅ パイプライン完了")
+        
+    except subprocess.CalledProcessError as e:
+        logger.error(f"❌ パイプライン失敗: {e}")
         sys.exit(1)
+
+
+@cli.command()
+@click.option('--configs', '-c', default='config/', help='設定ディレクトリ')
+@click.option('--input', '-i', required=True, help='入力ファイル')
+@click.option('--parallel', '-p', default=3, help='並列実行数')
+@click.pass_context
+def tune(ctx, configs, input, parallel):
+    """パラメーター調整（複数設定で並列実行）"""
+    from scripts.tuning.batch_tune import main as tune_main
+    
+    logger = setup_process_logging('main_tune', 'processing', ctx.obj.get('verbose', False))
+    logger.info(f"パラメーター調整: {input}")
+    
+    tune_main(input, configs, parallel, ctx.obj.get('verbose', False))
+
+
+@cli.command()
+@click.option('--category', type=click.Choice(['transcription', 'processing', 'monitoring']), 
+              default='processing', help='ログカテゴリ')
+@click.option('--days', default=7, help='保持日数')
+@click.option('--dry-run', is_flag=True, help='実際には削除しない')
+def cleanup(category, days, dry_run):
+    """古いログファイルをクリーンアップ"""
+    from src.utils.logging_config import cleanup_old_logs
+    
+    removed_files = cleanup_old_logs(days, dry_run)
+    if dry_run:
+        click.echo(f"削除対象: {len(removed_files)}ファイル")
+        for file in removed_files:
+            click.echo(f"  {file}")
+    else:
+        click.echo(f"削除完了: {len(removed_files)}ファイル")
 
 
 @cli.command()
 def version():
-    """バージョン情報を表示"""
-    click.echo("ShortsClipper v1.0.0-alpha")
-    click.echo("YouTube動画ハイライト検出ツール")
+    """バージョン情報"""
+    click.echo("ShortsClipper v2.0.0")
+    click.echo("純粋関数ベース YouTube ハイライト検出ツール")
 
 
 if __name__ == '__main__':
-    # CLIグループコマンドとして実行する場合
-    if len(sys.argv) > 1 and sys.argv[1] in ['validate-config', 'version']:
-        cli()
-    else:
-        # メインコマンドとして実行
-        main()
+    cli()

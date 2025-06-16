@@ -1,0 +1,51 @@
+# ハイライト検出プロセス設定ファイル（保守的）
+# Usage: python process_highlights.py --config config/highlight_detection_conservative.yaml
+
+# 保守的なハイライト検出設定（高品質優先）
+highlight_detection:
+  emotion_change_threshold: 0.3      # より高い感情変化閾値
+  high_emotion_threshold: 0.5        # より高い高感情閾値
+  keyword_weight: 2.0                # 控えめなキーワード重み
+  duration_weight: 2.0               # 継続時間重みを上げる
+  min_highlight_duration: 2.0        # より長い最小継続時間
+  min_highlight_score: 0.3           # より高い最小スコア
+  max_highlights: 8                  # より少ないハイライト数
+  min_confidence: 0.6                # より高い最小信頼度
+  merge_distance: 2.0                # より長い統合距離
+  config_name: "conservative"        # 設定名
+  
+  # 厳選されたエンゲージメントパターン
+  engagement_patterns:
+    questions:
+      - "どうして"
+      - "なぜ"
+      - "何故"
+      - "？"
+    exclamations:
+      - "！"
+      - "すごい"
+      - "素晴らしい"
+      - "完璧"
+      - "最高"
+    programming_terms:
+      - "エラー"
+      - "バグ"
+      - "デバッグ"
+      - "アルゴリズム"
+      - "フレームワーク"
+    completion_markers:
+      - "完成"
+      - "成功"
+      - "達成"
+      - "解決"
+      - "実装完了"
+    technical_interest:
+      - "面白い"
+      - "興味深い"
+      - "素晴らしい"
+      - "完璧"
+
+# ログ設定
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

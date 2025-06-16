@@ -1,0 +1,21 @@
+# 音声抽出プロセス設定ファイル
+# Usage: python process_audio.py --config config/audio_extraction.yaml
+
+# 音声抽出設定
+audio:
+  sample_rate: 16000      # サンプリングレート（Hz）
+  channels: 1             # チャンネル数（1=モノラル, 2=ステレオ）
+  format: "wav"           # 出力フォーマット
+  codec: "pcm_s16le"      # 音声コーデック
+  quality_level: "standard"  # 品質レベル (standard, high)
+
+# 処理設定
+processing:
+  chunk_size: 30          # 大容量ファイル用チャンクサイズ（秒）
+  timeout: 300            # タイムアウト（秒）
+  cleanup_temp: true      # 一時ファイル自動削除
+
+# ログ設定
+logging:
+  level: "INFO"           # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

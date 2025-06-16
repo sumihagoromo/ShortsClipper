@@ -1,0 +1,21 @@
+# 高品質音声抽出プロセス設定ファイル
+# Usage: python process_audio.py --config config/audio_extraction_high.yaml
+
+# 高品質音声抽出設定
+audio:
+  sample_rate: 44100      # 高品質サンプリングレート（Hz）
+  channels: 2             # ステレオ音声保持
+  format: "wav"           # 出力フォーマット
+  codec: "pcm_s24le"      # 24bit音声コーデック（高品質）
+  quality_level: "high"   # 高品質レベル
+
+# 処理設定
+processing:
+  chunk_size: 60          # 大きなチャンクサイズ（品質優先）
+  timeout: 600            # 長めのタイムアウト（高品質処理用）
+  cleanup_temp: true      # 一時ファイル自動削除
+
+# ログ設定
+logging:
+  level: "DEBUG"          # 詳細ログ出力
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

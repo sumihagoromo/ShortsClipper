@@ -1,0 +1,101 @@
+# ハイライト検出プロセス設定ファイル（アグレッシブ）
+# Usage: python process_highlights.py --config config/highlight_detection_aggressive.yaml
+
+# アグレッシブなハイライト検出設定
+highlight_detection:
+  emotion_change_threshold: 0.05     # より低い感情変化閾値
+  high_emotion_threshold: 0.1        # より低い高感情閾値
+  keyword_weight: 5.0                # より高いキーワード重み
+  duration_weight: 0.5               # 継続時間重みを下げる
+  min_highlight_duration: 0.3        # より短い最小継続時間
+  min_highlight_score: 0.05          # より低い最小スコア
+  max_highlights: 25                 # より多くのハイライト数
+  min_confidence: 0.2                # より低い最小信頼度
+  merge_distance: 0.5                # より短い統合距離
+  config_name: "aggressive"          # 設定名
+  
+  # より多くのエンゲージメントパターン
+  engagement_patterns:
+    questions:
+      - "どう"
+      - "なぜ"
+      - "何"
+      - "どこ"
+      - "いつ"
+      - "誰"
+      - "どれ"
+      - "どの"
+      - "どうして"
+      - "なんで"
+      - "？"
+      - "?"
+    exclamations:
+      - "！"
+      - "すごい"
+      - "やばい"
+      - "ヤバい"
+      - "マジ"
+      - "本当"
+      - "ほんと"
+      - "えー"
+      - "うわー"
+      - "おー"
+      - "わー"
+      - "きた"
+      - "でた"
+    programming_terms:
+      - "エラー"
+      - "バグ"
+      - "デバッグ"
+      - "コード"
+      - "プログラム"
+      - "アルゴリズム"
+      - "データ"
+      - "関数"
+      - "クラス"
+      - "変数"
+      - "API"
+      - "フレームワーク"
+      - "ライブラリ"
+      - "モジュール"
+      - "パッケージ"
+    completion_markers:
+      - "完成"
+      - "成功"
+      - "達成"
+      - "解決"
+      - "できた"
+      - "動いた"
+      - "うまくいった"
+      - "終了"
+      - "実装"
+      - "作成"
+      - "修正"
+    reactions:
+      - "あー"
+      - "おー"
+      - "うー"
+      - "へー"
+      - "ふーん"
+      - "なるほど"
+      - "そうか"
+      - "そっか"
+      - "わかる"
+      - "確かに"
+      - "そうそう"
+    technical_interest:
+      - "面白い"
+      - "興味深い"
+      - "便利"
+      - "使える"
+      - "いい"
+      - "良い"
+      - "素晴らしい"
+      - "完璧"
+      - "気になる"
+      - "注目"
+
+# ログ設定
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

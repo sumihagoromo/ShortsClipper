@@ -1,0 +1,38 @@
+# 高速文字起こしプロセス設定ファイル（精度より速度重視）
+# Usage: python process_transcript.py --config config/transcription_fast.yaml
+
+# 高速文字起こし設定
+transcription:
+  model_size: "base"             # 小さなモデル（高速）
+  language: "ja"                 # 言語コード
+  temperature: 0.0               # サンプリング温度
+  initial_prompt: "以下は日本語の音声です。"
+  word_timestamps: false         # 単語タイムスタンプを無効化（高速化）
+  condition_on_previous_text: false  # 前文脈の考慮を無効化（高速化）
+  device: "cpu"                  # CPU使用（メモリ効率）
+  compute_type: "int8"           # 整数計算（高速・省メモリ）
+  beam_size: 1                   # 最小ビームサイズ（高速化）
+  best_of: 1                     # 最小候補数（高速化）
+  patience: 0.5                  # 低忍耐度（高速化）
+  length_penalty: 1.0            # 長さペナルティ
+  repetition_penalty: 1.0        # 繰り返しペナルティなし
+  no_repeat_ngram_size: 0        # 繰り返し制御なし
+
+# 後処理設定（最小限）
+post_processing:
+  enable_tech_term_correction: false   # 技術用語補正無効化
+  enable_grammar_correction: false     # 文法補正無効化
+  enable_punctuation_cleanup: true     # 句読点清浄化のみ
+  min_segment_length: 0.5             # やや長い最小セグメント
+  max_segment_length: 60.0            # 長い最大セグメント
+
+# パフォーマンス設定
+performance:
+  batch_size: 32                      # 大きなバッチサイズ
+  num_workers: 2                      # 複数ワーカー
+  memory_efficient: true              # メモリ効率モード
+
+# ログ設定
+logging:
+  level: "WARNING"                    # 必要最小限のログ
+  format: "%(asctime)s - %(levelname)s - %(message)s"
