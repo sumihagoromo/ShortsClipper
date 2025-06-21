@@ -21,7 +21,7 @@ import time
 import hashlib
 import logging
 from pathlib import Path
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Optional, Tuple
 from dataclasses import dataclass, asdict
 import click
 import yaml
@@ -38,6 +38,11 @@ from src.utils.audio_processor import (
     cleanup_temp_file
 )
 from src.utils.logging_config import setup_process_logging
+from src.speech_detector import (
+    detect_speech_boundary,
+    SpeechDetectionConfig,
+    save_detection_result
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +56,10 @@ class AudioExtractionConfig:
     codec: str = "pcm_s16le"
     quality_level: str = "standard"  # standard, high
     
+    # 音声境界検出関連
+    speech_detection_enabled: bool = True
+    skip_seconds: int = 0  # 自動検出時は0、手動指定時は具体的な秒数
+    
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'AudioExtractionConfig':
         """辞書から設定を作成"""
@@ -62,18 +71,25 @@ class AudioExtractionResult:
     """音声抽出結果（イミュータブル）"""
     input_video_path: str
     output_audio_path: str
-    video_id: str
-    video_hash: str
-    config: AudioExtractionConfig
-    metadata: Dict[str, Any]
-    processing_time: float
-    success: bool
+    output_clean_audio_path: str = ""  # クリーン音声ファイルパス
+    video_id: str = ""
+    video_hash: str = ""
+    config: AudioExtractionConfig = None
+    metadata: Dict[str, Any] = None
+    processing_time: float = 0.0
+    success: bool = False
     error_message: str = ""
+    
+    # 音声境界検出結果
+    speech_detection_used: bool = False
+    detected_speech_start: Optional[int] = None
+    speech_detection_confidence: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         """辞書形式に変換"""
         result = asdict(self)
-        result['config'] = asdict(self.config)
+        if self.config:
+            result['config'] = asdict(self.config)
         return result
 
 
@@ -245,10 +261,95 @@ def extract_audio_pure(
         raise Exception(error_msg) from e
 
 
+def create_clean_audio_with_speech_detection(
+    input_audio_path: Path,
+    output_dir: Path,
+    video_id: str,
+    speech_detection_config: SpeechDetectionConfig,
+    audio_config: AudioExtractionConfig
+) -> Tuple[Optional[Path], Optional[int], float]:
+    """
+    音声境界自動検出を使用してクリーン音声ファイルを作成する純粋関数
+    
+    Args:
+        input_audio_path: 入力音声ファイルのパス
+        output_dir: 出力ディレクトリ
+        video_id: 動画ID
+        speech_detection_config: 音声検出設定
+        audio_config: 音声抽出設定
+        
+    Returns:
+        Tuple[Optional[Path], Optional[int], float]: 
+            (クリーン音声パス, 検出された開始時刻, 信頼度スコア)
+    """
+    try:
+        # 手動スキップが指定されている場合
+        if not audio_config.speech_detection_enabled or audio_config.skip_seconds > 0:
+            skip_seconds = audio_config.skip_seconds or speech_detection_config.default_skip_seconds
+            logger.info(f"手動スキップ設定を使用: {skip_seconds}秒")
+            
+            clean_audio_path = output_dir / f"{video_id}_audio_clean.wav"
+            
+            # FFmpegで指定秒数をスキップ
+            subprocess.run([
+                "ffmpeg", "-i", str(input_audio_path),
+                "-ss", str(skip_seconds),
+                "-y", str(clean_audio_path)
+            ], check=True, capture_output=True)
+            
+            return clean_audio_path, skip_seconds, 1.0
+        
+        # 自動検出実行
+        logger.info("音声境界自動検出を実行中...")
+        detection_result = detect_speech_boundary(input_audio_path, speech_detection_config)
+        
+        if detection_result.success and detection_result.detected_speech_start is not None:
+            skip_seconds = detection_result.detected_speech_start
+            confidence = detection_result.confidence_score
+            
+            logger.info(
+                f"音声境界検出成功: {skip_seconds}秒 (信頼度: {confidence:.3f})"
+            )
+            
+            # 検出結果を保存
+            save_detection_result(detection_result, output_dir)
+            
+            # クリーン音声作成
+            clean_audio_path = output_dir / f"{video_id}_audio_clean.wav"
+            
+            subprocess.run([
+                "ffmpeg", "-i", str(input_audio_path),
+                "-ss", str(skip_seconds),
+                "-y", str(clean_audio_path)
+            ], check=True, capture_output=True)
+            
+            return clean_audio_path, skip_seconds, confidence
+        
+        else:
+            # 自動検出失敗時のフォールバック
+            skip_seconds = speech_detection_config.default_skip_seconds
+            logger.warning(f"自動検出失敗、フォールバック使用: {skip_seconds}秒")
+            
+            clean_audio_path = output_dir / f"{video_id}_audio_clean.wav"
+            
+            subprocess.run([
+                "ffmpeg", "-i", str(input_audio_path),
+                "-ss", str(skip_seconds),
+                "-y", str(clean_audio_path)
+            ], check=True, capture_output=True)
+            
+            return clean_audio_path, skip_seconds, 0.0
+            
+    except Exception as e:
+        logger.error(f"クリーン音声作成エラー: {e}")
+        return None, None, 0.0
+
+
 def audio_extraction_workflow(
     input_video_path: str,
     output_dir: str,
-    config: AudioExtractionConfig
+    config: AudioExtractionConfig,
+    speech_detection_config: Optional[SpeechDetectionConfig] = None
 ) -> AudioExtractionResult:
     """
     音声抽出ワークフローを実行する純粋関数
@@ -257,6 +358,7 @@ def audio_extraction_workflow(
         input_video_path: 入力動画ファイルのパス
         output_dir: 出力ディレクトリ
         config: 音声抽出設定
+        speech_detection_config: 音声境界検出設定（オプション）
         
     Returns:
         AudioExtractionResult: 抽出結果
@@ -294,12 +396,28 @@ def audio_extraction_workflow(
         # 音声抽出実行
         extraction_metadata = extract_audio_pure(video_path, audio_file_path, config)
         
+        # 音声境界検出とクリーン音声作成
+        clean_audio_path = None
+        detected_speech_start = None
+        speech_detection_confidence = 0.0
+        speech_detection_used = False
+        
+        if speech_detection_config:
+            logger.info("音声境界検出を実行...")
+            clean_audio_path, detected_speech_start, speech_detection_confidence = \
+                create_clean_audio_with_speech_detection(
+                    audio_file_path, output_path, video_id, 
+                    speech_detection_config, config
+                )
+            speech_detection_used = True
+        
         # 結果作成
         processing_time = time.time() - start_time
         
         result = AudioExtractionResult(
             input_video_path=str(video_path),
             output_audio_path=str(audio_file_path),
+            output_clean_audio_path=str(clean_audio_path) if clean_audio_path else "",
             video_id=video_id,
             video_hash=video_hash,
             config=config,
@@ -309,10 +427,16 @@ def audio_extraction_workflow(
                 'timestamp': time.time()
             },
             processing_time=processing_time,
-            success=True
+            success=True,
+            speech_detection_used=speech_detection_used,
+            detected_speech_start=detected_speech_start,
+            speech_detection_confidence=speech_detection_confidence
         )
         
         logger.info(f"音声抽出ワークフロー完了: {processing_time:.2f}秒")
+        if speech_detection_used and detected_speech_start is not None:
+            logger.info(f"音声開始位置: {detected_speech_start}秒 (信頼度: {speech_detection_confidence:.3f})")
+        
         return result
         
     except Exception as e:
@@ -351,7 +475,7 @@ def save_audio_result(result: AudioExtractionResult, output_dir: Path) -> None:
     logger.info(f"音声抽出結果を保存: {meta_file_path}")
 
 
-def load_config(config_path: str) -> AudioExtractionConfig:
+def load_config(config_path: str) -> Tuple[AudioExtractionConfig, Optional[SpeechDetectionConfig]]:
     """
     設定ファイルを読み込む純粋関数
     
@@ -359,13 +483,14 @@ def load_config(config_path: str) -> AudioExtractionConfig:
         config_path: 設定ファイルのパス
         
     Returns:
-        AudioExtractionConfig: 音声抽出設定
+        Tuple[AudioExtractionConfig, Optional[SpeechDetectionConfig]]: 
+            音声抽出設定と音声境界検出設定
     """
     config_file = Path(config_path)
     
     if not config_file.exists():
         logger.warning(f"設定ファイルが見つかりません: {config_path}")
-        return AudioExtractionConfig()  # デフォルト設定
+        return AudioExtractionConfig(), None
     
     try:
         with open(config_file, 'r', encoding='utf-8') as f:
@@ -375,12 +500,24 @@ def load_config(config_path: str) -> AudioExtractionConfig:
                 config_dict = json.load(f)
         
         # audio設定セクションを取得
-        audio_config = config_dict.get('audio', {})
-        return AudioExtractionConfig.from_dict(audio_config)
+        audio_config_dict = config_dict.get('audio', {})
+        audio_config = AudioExtractionConfig.from_dict(audio_config_dict)
+        
+        # 音声境界検出設定を取得
+        speech_detection_dict = config_dict.get('speech_detection', {})
+        speech_detection_config = None
+        
+        if speech_detection_dict.get('enabled', False):
+            speech_detection_config = SpeechDetectionConfig.from_dict(speech_detection_dict)
+            # audio_configの設定を反映
+            if not audio_config.speech_detection_enabled:
+                speech_detection_config = None
+        
+        return audio_config, speech_detection_config
         
     except Exception as e:
         logger.warning(f"設定ファイル読み込みエラー: {e}")
-        return AudioExtractionConfig()  # デフォルト設定
+        return AudioExtractionConfig(), None
 
 
 @click.command()
@@ -390,8 +527,11 @@ def load_config(config_path: str) -> AudioExtractionConfig:
               help='出力ディレクトリ (デフォルト: data/stage1_audio)')
 @click.option('--config', '-c', 'config_path', default='config/audio_extraction.yaml',
               help='設定ファイルのパス')
+@click.option('--skip-seconds', type=int, help='手動スキップ秒数（自動検出無効化）')
+@click.option('--no-speech-detection', is_flag=True, help='音声境界自動検出を無効化')
 @click.option('--verbose', '-v', is_flag=True, help='詳細ログ出力')
-def main(input_path: str, output_dir: str, config_path: str, verbose: bool):
+def main(input_path: str, output_dir: str, config_path: str, skip_seconds: Optional[int], 
+         no_speech_detection: bool, verbose: bool):
     """
     純粋関数ベース音声抽出プロセス
     
@@ -413,11 +553,26 @@ def main(input_path: str, output_dir: str, config_path: str, verbose: bool):
     
     try:
         # 設定読み込み
-        config = load_config(config_path)
+        config, speech_detection_config = load_config(config_path)
+        
+        # CLI オプションで設定をオーバーライド
+        if skip_seconds is not None:
+            config.skip_seconds = skip_seconds
+            config.speech_detection_enabled = False
+            speech_detection_config = None
+            
+        if no_speech_detection:
+            config.speech_detection_enabled = False
+            speech_detection_config = None
+        
         logger.info(f"音声抽出設定: {asdict(config)}")
+        if speech_detection_config:
+            logger.info("音声境界自動検出: 有効")
+        else:
+            logger.info("音声境界自動検出: 無効")
         
         # 音声抽出実行
-        result = audio_extraction_workflow(input_path, output_dir, config)
+        result = audio_extraction_workflow(input_path, output_dir, config, speech_detection_config)
         
         if result.success:
             # 結果保存
@@ -427,7 +582,16 @@ def main(input_path: str, output_dir: str, config_path: str, verbose: bool):
             logger.info(f"処理時間: {result.processing_time:.2f}秒")
             logger.info(f"出力ファイル: {result.output_audio_path}")
             
+            if result.output_clean_audio_path:
+                logger.info(f"クリーン音声ファイル: {result.output_clean_audio_path}")
+                
+            if result.speech_detection_used and result.detected_speech_start is not None:
+                logger.info(f"検出された音声開始位置: {result.detected_speech_start}秒")
+                logger.info(f"検出信頼度: {result.speech_detection_confidence:.3f}")
+            
             click.echo(f"✅ 音声抽出成功: {result.output_audio_path}")
+            if result.output_clean_audio_path:
+                click.echo(f"✅ クリーン音声作成: {result.output_clean_audio_path}")
             
         else:
             logger.error(f"音声抽出失敗: {result.error_message}")

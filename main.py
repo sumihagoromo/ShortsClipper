@@ -28,16 +28,20 @@ def cli(ctx, verbose):
 @click.argument('input_path', type=click.Path(exists=True))
 @click.option('--output', '-o', default='data/stage1_audio', help='出力ディレクトリ')
 @click.option('--config', '-c', default='config/audio_extraction.yaml', help='設定ファイル')
+@click.option('--skip-seconds', type=int, help='手動スキップ秒数（自動検出無効化）')
+@click.option('--no-speech-detection', is_flag=True, help='音声境界自動検出を無効化')
 @click.pass_context
-def audio(ctx, input_path, output, config):
-    """動画から音声を抽出"""
+def audio(ctx, input_path, output, config, skip_seconds, no_speech_detection):
+    """動画から音声を抽出（音声境界自動検出対応）"""
     from process_audio import main as audio_main
     
-    logger = setup_process_logging('main_audio', 'processing', ctx.obj.get('verbose', False))
+    logger = setup_process_logging('main_audio', 'processing', 
+                                 logging.DEBUG if ctx.obj.get('verbose', False) else logging.INFO)
     logger.info(f"音声抽出: {input_path} -> {output}")
     
     # process_audio.pyのmain関数を呼び出し
-    audio_main(input_path, output, config, ctx.obj.get('verbose', False))
+    audio_main.callback(input_path, output, config, skip_seconds, 
+                       no_speech_detection, ctx.obj.get('verbose', False))
 
 
 @cli.command()
@@ -238,10 +242,87 @@ def cleanup(category, days, dry_run):
 
 
 @cli.command()
+@click.argument('audio_path', type=click.Path(exists=True))
+@click.option('--output', '-o', default='data/test_output', help='出力ディレクトリ')
+@click.option('--quick', '-q', is_flag=True, help='クイック検出モード')
+@click.option('--max-check-minutes', default=10, help='最大チェック時間（分）')
+@click.option('--default-skip', default=180, help='デフォルトスキップ時間（秒）')
+@click.pass_context
+def detect_speech(ctx, audio_path, output, quick, max_check_minutes, default_skip):
+    """音声境界自動検出（テスト用）"""
+    from scripts.test_speech_detection import main as test_main
+    
+    logger = setup_process_logging('main_detect_speech', 'analysis', 
+                                 logging.DEBUG if ctx.obj.get('verbose', False) else logging.INFO)
+    logger.info(f"音声境界検出テスト: {audio_path}")
+    
+    # テストスクリプトを呼び出し
+    test_main.callback(audio_path, output, quick, max_check_minutes, 
+                      default_skip, ctx.obj.get('verbose', False))
+
+
+@cli.command()
+@click.argument('highlights_path', type=click.Path(exists=True))
+@click.option('--output', '-o', default='data/stage5_output', help='出力ディレクトリ')
+@click.option('--format', '-f', 
+              type=click.Choice(['all', 'premiere', 'davinci', 'youtube', 'timeline']),
+              default='all', help='出力形式')
+@click.option('--min-level', type=click.Choice(['low', 'medium', 'high']), 
+              default='medium', help='最小ハイライトレベル')
+@click.option('--max-segments', type=int, default=15, help='最大セグメント数')
+@click.option('--video-duration', type=float, help='動画の総時間（秒）')
+@click.pass_context
+def export(ctx, highlights_path, output, format, min_level, max_segments, video_duration):
+    """ハイライトを動画編集ソフト対応形式でエクスポート"""
+    from src.export_formatter import export_highlights_all_formats, ExportConfig
+    
+    logger = setup_process_logging('main_export', 'processing', 
+                                 logging.DEBUG if ctx.obj.get('verbose', False) else logging.INFO)
+    logger.info(f"ハイライトエクスポート: {highlights_path} -> {output}")
+    
+    try:
+        # エクスポート設定
+        config = ExportConfig(
+            min_highlight_level=min_level,
+            max_segments=max_segments
+        )
+        
+        # エクスポート実行
+        output_files = export_highlights_all_formats(
+            highlights_path, output, config, video_duration
+        )
+        
+        if format != 'all':
+            # 特定形式のみ表示
+            format_map = {
+                'premiere': 'premiere_pro',
+                'davinci': 'davinci_resolve',
+                'youtube': 'youtube_chapters',
+                'timeline': 'timeline_report'
+            }
+            target_format = format_map.get(format, format)
+            if target_format in output_files:
+                click.echo(f"✅ {format}形式エクスポート完了: {output_files[target_format]}")
+            else:
+                click.echo(f"❌ {format}形式のエクスポートに失敗")
+        else:
+            # 全形式の結果表示
+            click.echo(f"✅ 全形式エクスポート完了: {len(output_files)}個のファイル生成")
+            for format_name, file_path in output_files.items():
+                click.echo(f"  📄 {format_name}: {file_path}")
+        
+    except Exception as e:
+        logger.error(f"エクスポートエラー: {e}")
+        click.echo(f"❌ エクスポート失敗: {e}")
+        sys.exit(1)
+
+
+@cli.command()
 def version():
     """バージョン情報"""
     click.echo("ShortsClipper v2.0.0")
     click.echo("純粋関数ベース YouTube ハイライト検出ツール")
+    click.echo("音声境界自動検出機能搭載")
 
 
 if __name__ == '__main__':

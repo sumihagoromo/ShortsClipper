@@ -15,6 +15,27 @@ processing:
   timeout: 300            # タイムアウト（秒）
   cleanup_temp: true      # 一時ファイル自動削除
 
+# 音声境界検出設定
+speech_detection:
+  enabled: true               # 自動検出を有効にする
+  check_interval: 120         # チェック間隔（秒）
+  max_check_duration: 600     # 最大チェック時間（秒、10分）
+  segment_duration: 120       # セグメント長（秒）
+  
+  # Whisper設定
+  model_size: "base"          # Whisperモデルサイズ
+  language: "ja"              # 言語設定
+  temperature: 0.0            # 温度パラメーター
+  beam_size: 1                # ビームサーチサイズ
+  
+  # 判定閾値
+  language_probability_threshold: 0.7   # 言語確率閾値
+  minimum_segments_count: 3            # 最小セグメント数
+  meaningful_text_min_length: 3        # 有意義なテキスト最小長
+  
+  # フォールバック設定
+  default_skip_seconds: 180   # デフォルトスキップ時間（3分）
+
 # ログ設定
 logging:
   level: "INFO"           # DEBUG, INFO, WARNING, ERROR
