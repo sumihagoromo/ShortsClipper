@@ -1,10 +1,10 @@
 # ShortsClipper v2.0
 
-YouTubeライブ配信から高精度な日本語音声認識とAI感情分析を行い、効率的なショート動画編集を支援する純粋関数ベースツール
+YouTubeライブ配信から高精度な日本語音声認識とAI感情分析を行い、動画編集ソフト対応の実用的ハイライト出力を提供する純粋関数ベースツール
 
 ## 🎯 概要
 
-ShortsClipperは、長時間のYouTubeライブ配信動画を分析し、技術的内容に特化した高精度転写と感情変化検出により、ショート動画作成に最適な編集ポイントを自動特定するPythonツールです。
+ShortsClipperは、長時間のYouTubeライブ配信動画を分析し、技術的内容に特化した高精度転写と感情変化検出により、ショート動画作成に最適な編集ポイントを自動特定するPythonツールです。**Phase 3で動画編集ソフト対応出力機能を完全実装**し、実用的な動画制作ワークフローを実現しました。
 
 ### ✨ 主な機能
 
@@ -13,6 +13,9 @@ ShortsClipperは、長時間のYouTubeライブ配信動画を分析し、技術
 - **🧠 AI感情分析**: ML-Ask による日本語感情分析とハイライト検出
 - **⚙️ 純粋関数設計**: 段階的処理による効率的パラメーター調整
 - **🖥️ CLI統合**: 個別実行とパイプライン実行の柔軟なワークフロー
+- **🎬 動画編集ソフト対応**: Premiere Pro、DaVinci Resolve直接対応
+- **📺 YouTubeチャプター生成**: 自動チャプター・説明欄用フォーマット
+- **📊 タイムライン視覚レポート**: 元動画時間軸対応の詳細分析
 
 ## 🚀 クイックスタート
 
@@ -30,6 +33,25 @@ python main.py emotions transcript.json
 
 # Stage 4: ハイライト検出
 python main.py highlights emotions.json --preset aggressive
+
+# Stage 5: 動画編集ソフト対応エクスポート 🆕
+python main.py export highlights.json --format all
+```
+
+### 🆕 新機能: 動画編集ソフト対応エクスポート
+
+```bash
+# 全形式エクスポート（Premiere Pro、DaVinci Resolve、YouTube、タイムライン）
+python main.py export highlights.json --format all
+
+# 特定形式エクスポート
+python main.py export highlights.json --format premiere --min-level medium
+python main.py export highlights.json --format davinci --max-segments 15
+python main.py export highlights.json --format youtube --video-duration 1200
+python main.py export highlights.json --format timeline --min-level low
+
+# 音声境界自動検出テスト
+python main.py detect-speech audio.wav --quick
 ```
 
 ### パイプライン一括実行

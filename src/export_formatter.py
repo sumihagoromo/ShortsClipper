@@ -110,6 +110,51 @@ def seconds_to_timecode(seconds: float, frame_rate: float = 30.0, format: str = 
         return f"{hours:02d}:{minutes:02d}:{secs:02d}.{frames:02d}"
 
 
+def load_audio_offset_from_metadata(video_id: str, audio_meta_dir: str = "data/stage1_audio") -> float:
+    """
+    音声抽出メタデータからスキップ時間を取得する純粋関数
+    
+    Args:
+        video_id: 動画ID
+        audio_meta_dir: 音声メタデータディレクトリ
+        
+    Returns:
+        float: スキップされた時間（秒）、見つからない場合は0.0
+    """
+    meta_file = Path(audio_meta_dir) / f"{video_id}_audio_meta.json"
+    
+    if not meta_file.exists():
+        logger.warning(f"音声メタデータファイルが見つかりません: {meta_file}")
+        return 0.0
+    
+    try:
+        with open(meta_file, 'r', encoding='utf-8') as f:
+            meta_data = json.load(f)
+        
+        # 検出されたスピーチ開始位置を取得
+        detected_start = meta_data.get('detected_speech_start', 0)
+        if detected_start is not None and detected_start > 0:
+            return float(detected_start)
+        
+        # 手動スキップ時間を取得
+        config = meta_data.get('config', {})
+        skip_seconds = config.get('skip_seconds', 0)
+        if skip_seconds > 0:
+            return float(skip_seconds)
+        
+        # デフォルトで180秒スキップ（従来の動作）
+        # クリーン音声ファイルが存在する場合
+        clean_audio_path = meta_data.get('output_clean_audio_path', '')
+        if clean_audio_path and Path(clean_audio_path).exists():
+            return 180.0  # デフォルトの音楽スキップ時間
+        
+        return 0.0
+        
+    except Exception as e:
+        logger.error(f"音声メタデータ読み込みエラー: {e}")
+        return 0.0
+
+
 def load_highlights_data(file_path: Union[str, Path]) -> List[HighlightSegment]:
     """
     ハイライト検出結果ファイルを読み込む純粋関数
@@ -186,6 +231,40 @@ def load_highlights_data(file_path: Union[str, Path]) -> List[HighlightSegment]:
     except Exception as e:
         logger.error(f"ハイライトデータ読み込みエラー: {e}")
         return []
+
+
+def apply_video_offset_to_highlights(
+    highlights: List[HighlightSegment], 
+    audio_offset: float
+) -> List[HighlightSegment]:
+    """
+    ハイライト時間に元動画のオフセットを加算する純粋関数
+    
+    Args:
+        highlights: ハイライトセグメントのリスト
+        audio_offset: 音声開始オフセット（秒）
+        
+    Returns:
+        List[HighlightSegment]: オフセット調整済みハイライト
+    """
+    if audio_offset <= 0:
+        return highlights
+    
+    adjusted_highlights = []
+    for highlight in highlights:
+        adjusted_highlight = HighlightSegment(
+            start_time=highlight.start_time + audio_offset,
+            end_time=highlight.end_time + audio_offset,
+            text=highlight.text,
+            emotion_type=highlight.emotion_type,
+            emotion_score=highlight.emotion_score,
+            highlight_level=highlight.highlight_level,
+            keywords=highlight.keywords,
+            confidence=highlight.confidence
+        )
+        adjusted_highlights.append(adjusted_highlight)
+    
+    return adjusted_highlights
 
 
 def filter_highlights(
@@ -492,7 +571,8 @@ def adjust_chapter_intervals(
 def export_timeline_report(
     highlights: List[HighlightSegment],
     output_path: Union[str, Path],
-    config: ExportConfig
+    config: ExportConfig,
+    audio_offset: float = 0.0
 ) -> None:
     """
     タイムライン形式の視覚レポートを生成する純粋関数
@@ -510,7 +590,13 @@ def export_timeline_report(
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("# ShortsClipper タイムライン解析レポート\n\n")
         f.write(f"生成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"ハイライト数: {len(filtered_highlights)}個\n\n")
+        f.write(f"ハイライト数: {len(filtered_highlights)}個\n")
+        
+        # 時間軸の説明を追加
+        if audio_offset > 0:
+            f.write(f"**時間軸**: 元動画基準（音声オフセット +{audio_offset:.1f}秒 適用済み）\n\n")
+        else:
+            f.write("**時間軸**: 元動画基準\n\n")
         
         f.write("## ハイライト一覧\n\n")
         
@@ -594,6 +680,19 @@ def export_highlights_all_formats(
         logger.warning("ハイライトデータが見つかりませんでした")
         return {}
     
+    # 動画IDを抽出（ファイル名から）
+    video_id = highlights_path.stem.replace('_highlights_aggressive', '').replace('_highlights_standard', '').replace('_highlights_conservative', '').replace('_clean_10min_highlights_default', '').replace('_highlights_default', '')
+    
+    # 音声オフセットを取得
+    audio_offset = load_audio_offset_from_metadata(video_id)
+    
+    # ハイライト時間を元動画時間軸に調整
+    if audio_offset > 0:
+        logger.info(f"音声オフセット適用: {audio_offset}秒")
+        highlights = apply_video_offset_to_highlights(highlights, audio_offset)
+    else:
+        logger.info("音声オフセットなし（元動画時間軸のまま）")
+    
     base_name = highlights_path.stem
     output_files = {}
     
@@ -615,7 +714,7 @@ def export_highlights_all_formats(
         
         # タイムライン解析レポート
         timeline_file = output_path / f"{base_name}_timeline_report.md"
-        export_timeline_report(highlights, timeline_file, config)
+        export_timeline_report(highlights, timeline_file, config, audio_offset)
         output_files['timeline_report'] = str(timeline_file)
         
         logger.info(f"全形式エクスポート完了: {len(output_files)}個のファイル生成")
